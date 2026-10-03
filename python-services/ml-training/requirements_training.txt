@@ -1,0 +1,28 @@
+# ── Model Training Dependencies ──────────────────────────────────
+# Install: pip install -r requirements_training.txt
+# GPU note: install torch with CUDA via: pip install torch --index-url https://download.pytorch.org/whl/cu118
+
+torch==2.1.2
+transformers==4.36.2
+datasets==2.16.1
+accelerate==0.26.1
+evaluate==0.4.1
+scikit-learn==1.3.2
+numpy==1.26.3
+pandas==2.1.4
+tqdm==4.66.1
+matplotlib==3.8.2
+seaborn==0.13.1
+
+# For mixed-precision training (speeds up T4/A100 by 2x)
+bitsandbytes==0.41.3
+
+# Metrics
+scipy==1.12.0
+
+# Saving/loading models
+safetensors==0.4.1
+sentencepiece==0.1.99
+
+# Notebook support (Colab already has these)
+ipywidgets==8.1.1

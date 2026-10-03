@@ -18,18 +18,18 @@ export class LeadsController {
   }
 
   @Get(':id')
-  getOne(@Param('id') id: string) {
-    return this.leadsService.getLead(id);
+  getOne(@Param('id') id: string, @Request() req) {
+    return this.leadsService.getLead(id, req.user.id);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() body: any) {
-    return this.leadsService.updateLead(id, body);
+  update(@Param('id') id: string, @Body() body: any, @Request() req) {
+    return this.leadsService.updateLead(id, req.user.id, body);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.leadsService.deleteLead(id);
+  remove(@Param('id') id: string, @Request() req) {
+    return this.leadsService.deleteLead(id, req.user.id);
   }
 
   @Post('import')

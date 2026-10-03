@@ -1,0 +1,18 @@
+{
+  "base_model": "distilbert-base-uncased",
+  "categories": {
+    "0": "Food & Beverage",
+    "1": "Retail & Shopping",
+    "2": "Healthcare & Wellness",
+    "3": "Technology & Software",
+    "4": "Finance & Banking",
+    "5": "Real Estate & Property",
+    "6": "Entertainment & Media",
+    "7": "Professional Services",
+    "8": "Education & Training",
+    "9": "Automotive & Transport"
+  },
+  "accuracy": 0.9023,
+  "f1_weighted": 0.9018,
+  "trained_at": "2026-05-09T22:59:35.420589"
+}

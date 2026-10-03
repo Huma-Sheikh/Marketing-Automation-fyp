@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
+import PhoneNumbers from "@/components/PhoneNumbers";
 import { checkHealth } from "@/lib/api";
 
 export default function SettingsPage() {
@@ -16,7 +17,7 @@ export default function SettingsPage() {
   useEffect(() => { checkAll(); }, []);
 
   const APIS = [
-    { name: "Twilio", desc: "Phone calls & SMS", env: "TWILIO_ACCOUNT_SID", url: "twilio.com" },
+    { name: "Twilio", desc: "Platform fallback number for calls & SMS", env: "TWILIO_ACCOUNT_SID", url: "twilio.com" },
     { name: "Resend", desc: "Email sending (3000 free/mo)", env: "RESEND_API_KEY", url: "resend.com" },
     { name: "Stripe", desc: "Subscription billing", env: "STRIPE_SECRET_KEY", url: "stripe.com" },
     { name: "Google Places", desc: "Business search", env: "GOOGLE_PLACES_API_KEY", url: "console.cloud.google.com" },
@@ -32,6 +33,8 @@ export default function SettingsPage() {
         </div>
 
         <div className="max-w-2xl space-y-6">
+          <PhoneNumbers />
+
           {/* AI Services */}
           <div className="glass rounded-2xl p-6 border border-ink-600/30">
             <div className="flex items-center justify-between mb-5">

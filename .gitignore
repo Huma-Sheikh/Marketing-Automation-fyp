@@ -1,7 +1,28 @@
+# dependencies
 node_modules/
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# build output
 .next/
+dist/
+coverage/
+*.tsbuildinfo
+
+# environment
 .env
+.env.local
 *.log
+
+# python tooling
+.pytest_cache/
+
+# model weights — too large for git. See each service README for how to obtain
+# them (train with python-services/ml-training/, or pull from your model store).
 *.pth
 *.safetensors
-models/
+*.gguf
+*.joblib
+*.bin

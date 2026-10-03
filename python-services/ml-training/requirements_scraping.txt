@@ -1,0 +1,20 @@
+# ── No-Auth Lead Scraping Dependencies ──────────────────────────
+# Install: pip install -r requirements_scraping.txt
+# All packages work WITHOUT any account credentials or API keys.
+
+# Core HTTP + HTML parsing
+requests==2.31.0
+beautifulsoup4==4.12.2
+
+# DuckDuckGo search — finds LinkedIn/Facebook profile URLs (no API key)
+duckduckgo-search==3.9.6
+
+# Selenium headless Chrome — TikTok creator search (JS-rendered page)
+selenium==4.16.0
+webdriver-manager==4.0.1
+
+# Data processing + export
+pandas==2.1.4
+tqdm==4.66.1
+python-dateutil==2.8.2
+openpyxl==3.1.2

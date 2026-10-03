@@ -4,10 +4,10 @@ import Sidebar from "@/components/Sidebar";
 import { getLeads, scrapeLeads, deleteLead } from "@/lib/api";
 
 const PLATFORMS = [
-  { id: "linkedin",  label: "LinkedIn",  color: "#0A66C2", emoji: "💼" },
+  { id: "linkedin", label: "LinkedIn", color: "#0A66C2", emoji: "💼" },
   { id: "instagram", label: "Instagram", color: "#E1306C", emoji: "📸" },
-  { id: "facebook",  label: "Facebook",  color: "#1877F2", emoji: "👥" },
-  { id: "twitter",   label: "Twitter",   color: "#1DA1F2", emoji: "🐦" },
+  { id: "facebook", label: "Facebook", color: "#1877F2", emoji: "👥" },
+  { id: "twitter", label: "Twitter", color: "#1DA1F2", emoji: "🐦" },
 ];
 
 const STATUSES = ["", "new", "contacted", "qualified", "converted", "rejected"];
@@ -32,11 +32,11 @@ function ScoreBadge({ score }: { score: number }) {
 
 function StatusBadge({ status }: { status: string }) {
   const cfg: any = {
-    new:       { color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+    new: { color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
     contacted: { color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
     qualified: { color: "#06B6D4", bg: "rgba(6,182,212,0.12)" },
     converted: { color: "#10B981", bg: "rgba(16,185,129,0.12)" },
-    rejected:  { color: "#6B82A8", bg: "rgba(107,130,168,0.12)" },
+    rejected: { color: "#6B82A8", bg: "rgba(107,130,168,0.12)" },
   };
   const c = cfg[status] || cfg.new;
   return (
@@ -49,7 +49,7 @@ function StatusBadge({ status }: { status: string }) {
 function SkeletonRow() {
   return (
     <tr>
-      {[1,2,3,4,5,6].map(i => (
+      {[1, 2, 3, 4, 5, 6].map(i => (
         <td key={i} className="px-4 py-3.5"><div className="h-4 rounded skeleton" style={{ width: `${60 + i * 10}%` }} /></td>
       ))}
     </tr>
@@ -112,11 +112,10 @@ export default function LeadsPage() {
           <div className="flex gap-2 mb-4">
             {PLATFORMS.map(p => (
               <button key={p.id} onClick={() => setPlatform(p.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-body font-medium transition-all duration-200 border ${
-                  platform === p.id
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-body font-medium transition-all duration-200 border ${platform === p.id
                     ? "border-current text-white"
                     : "border-ink-600 text-mist-500 hover:border-ink-500 hover:text-mist-300"
-                }`}
+                  }`}
                 style={platform === p.id ? { background: `${p.color}20`, borderColor: `${p.color}50`, color: p.color } : {}}>
                 <span>{p.emoji}</span> {p.label}
               </button>
@@ -131,8 +130,8 @@ export default function LeadsPage() {
             <button onClick={handleScrape} disabled={scraping || !query.trim()}
               className="btn-press flex items-center gap-2 bg-electric-600 hover:bg-electric-500 text-white px-6 py-3 rounded-xl text-sm font-display font-semibold disabled:opacity-40 transition-all shadow-glow-blue">
               {scraping ? (
-                <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Scanning...</>
-              ) : (<>⚡ Find Leads</>)}
+                <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> Scanning...</>
+              ) : (<> Find Leads</>)}
             </button>
           </div>
           {error && <p className="text-neon-red text-sm mt-3 font-body flex items-center gap-1"><span>✕</span> {error}</p>}
@@ -143,11 +142,10 @@ export default function LeadsPage() {
           <div className="flex gap-1.5">
             {STATUSES.map(s => (
               <button key={s} onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-body font-medium transition-all capitalize ${
-                  statusFilter === s
+                className={`px-3 py-1.5 rounded-lg text-xs font-body font-medium transition-all capitalize ${statusFilter === s
                     ? "bg-electric-600 text-white shadow-glow-blue"
                     : "bg-ink-800 text-mist-500 hover:bg-ink-700 hover:text-mist-300 border border-ink-600"
-                }`}>
+                  }`}>
                 {s === "" ? "All" : s}
               </button>
             ))}
@@ -167,7 +165,7 @@ export default function LeadsPage() {
             </thead>
             <tbody className="divide-y divide-ink-800/50">
               {loading ? (
-                [1,2,3,4,5].map(i => <SkeletonRow key={i} />)
+                [1, 2, 3, 4, 5].map(i => <SkeletonRow key={i} />)
               ) : leads.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-16">

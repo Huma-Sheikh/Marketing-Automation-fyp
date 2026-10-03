@@ -1,0 +1,37 @@
+{
+  "datasets_used": [
+    "CoNLL-2003",
+    "WNUT-17",
+    "MultiNERD-en",
+    "Few-NERD"
+  ],
+  "datasets_loaded": 4,
+  "train_size": 87435,
+  "val_size": 8259,
+  "test_size": 3453,
+  "test_metrics": {
+    "eval_loss": 0.12630431354045868,
+    "eval_f1": 0.8796402802467845,
+    "eval_precision": 0.9101925990045445,
+    "eval_recall": 0.8510724403075678,
+    "eval_LOC_f1": 0.888680425265791,
+    "eval_ORG_f1": 0.8425897514575024,
+    "eval_PERSON_f1": 0.9092079845460398,
+    "eval_runtime": 2.8342,
+    "eval_samples_per_second": 1218.329,
+    "eval_steps_per_second": 19.053,
+    "epoch": 4.0
+  },
+  "labels": [
+    "O",
+    "B-PERSON",
+    "I-PERSON",
+    "B-ORG",
+    "I-ORG",
+    "B-LOC",
+    "I-LOC"
+  ],
+  "model_name": "distilbert-base-cased",
+  "epochs": 4,
+  "batch_size": 32
+}

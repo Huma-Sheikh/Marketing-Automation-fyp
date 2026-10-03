@@ -1,2 +1,17 @@
+# Prebuilt CPU wheels for llama-cpp-python. PyPI ships ONLY an sdist for this
+# package, so without this index pip tries to COMPILE llama.cpp from source —
+# which fails in python:3.10-slim (no gcc/g++/cmake) and would otherwise mean
+# adding ~300MB of build tooling to the image.
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
 fastapi==0.109.0
 uvicorn==0.27.0
+
+# Pinned to a version with a cp310 linux_x86_64 wheel on the index above.
+# Loads the q4_K_M GGUF produced by ml-training/colab_05_llm_sales_brain.py.
+llama-cpp-python==0.3.19
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+httpx==0.26.0

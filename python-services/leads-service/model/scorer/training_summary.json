@@ -1,0 +1,42 @@
+{
+  "model_type": "XGBRegressor",
+  "training_data": {
+    "synthetic_leads": 5000,
+    "real_scraped_leads": 0,
+    "total": 5000,
+    "train_size": 3400,
+    "val_size": 600,
+    "test_size": 1000
+  },
+  "test_metrics": {
+    "rmse": 4.419457519520433,
+    "mae": 3.558087110519409,
+    "r2": 0.9322088956832886
+  },
+  "feature_names": [
+    "platform_origin",
+    "job_title_seniority",
+    "has_email",
+    "has_phone",
+    "company_size_indicator",
+    "engagement_estimate",
+    "industry_signal",
+    "bio_completeness"
+  ],
+  "feature_importance": {
+    "platform_origin": 0.009683103300631046,
+    "job_title_seniority": 0.2644662857055664,
+    "has_email": 0.5749886631965637,
+    "has_phone": 0.03123794123530388,
+    "company_size_indicator": 0.00702499458566308,
+    "engagement_estimate": 0.00777478190138936,
+    "industry_signal": 0.09421569108963013,
+    "bio_completeness": 0.010608525946736336
+  },
+  "hyperparameters": {
+    "n_estimators": 300,
+    "max_depth": 6,
+    "learning_rate": 0.08
+  },
+  "label_generation": "hand-crafted scoring rule + gaussian noise (replace with real conversion outcomes when available)"
+}

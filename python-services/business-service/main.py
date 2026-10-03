@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 import requests
 from fastapi import FastAPI, Query
@@ -10,9 +11,28 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Business Scraper + Sentiment Service")
 
-MODELS_DIR = "models"
+# The trained checkpoints live in model/ (singular) — see README. Overridable
+# so the Docker image and a local checkout can point at different locations.
+MODELS_DIR = os.getenv("MODELS_DIR", "model")
 GOOGLE_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY", "")
-sentiment_model = None
+sentiment_model  = None   # RoBERTa fine-tuned on Yelp+Amazon+Twitter
+category_model   = None   # DistilBERT fine-tuned on 10 business categories
+# Below this softmax score we prefer the Google Places `types` mapping over the
+# classifier — see _classify_business_category().
+CATEGORY_MIN_CONFIDENCE = float(os.getenv("CATEGORY_MIN_CONFIDENCE", "0.75"))
+
+BUSINESS_CATEGORIES = {
+    0: "Food & Beverage",
+    1: "Retail & Shopping",
+    2: "Healthcare & Wellness",
+    3: "Technology & Software",
+    4: "Finance & Banking",
+    5: "Real Estate & Property",
+    6: "Entertainment & Media",
+    7: "Professional Services",
+    8: "Education & Training",
+    9: "Automotive & Transport",
+}
 
 # ── Region presets ─────────────────────────────────────────
 # Maps short region codes to full location strings for Places API
@@ -44,17 +64,56 @@ REGIONS = {
 }
 
 def load_models():
-    global sentiment_model
-    model_path = os.path.join(MODELS_DIR, "sentiment_roberta")
-    if os.path.exists(model_path):
+    global sentiment_model, category_model
+
+    # ── Sentiment model (trained by colab_02_sentiment_training.py) ──
+    sentiment_path = os.path.join(MODELS_DIR, "sentiment_roberta")
+    if os.path.exists(sentiment_path):
         try:
             from transformers import pipeline
-            sentiment_model = pipeline("text-classification", model=model_path)
-            logger.info("Sentiment model loaded")
+            sentiment_model = pipeline(
+                "text-classification",
+                model=sentiment_path,
+                device=0 if _cuda_available() else -1,
+            )
+            logger.info("Sentiment model loaded (fine-tuned RoBERTa)")
         except Exception as e:
             logger.warning(f"Sentiment model load failed: {e}")
     else:
-        logger.info("Sentiment model not found — stub mode")
+        logger.info("Sentiment model not found — using rating-based fallback")
+
+    # ── Business category model (trained by colab_02_sentiment_training.py) ──
+    category_path = os.path.join(MODELS_DIR, "business_category")
+    if os.path.exists(category_path):
+        try:
+            from transformers import pipeline
+            # Load category labels from saved config
+            config_file = os.path.join(category_path, "training_info.json")
+            if os.path.exists(config_file):
+                with open(config_file) as f:
+                    cfg = json.load(f)
+                    global BUSINESS_CATEGORIES
+                    BUSINESS_CATEGORIES = {int(k): v for k, v in cfg.get("categories", BUSINESS_CATEGORIES).items()}
+
+            category_model = pipeline(
+                "text-classification",
+                model=category_path,
+                device=0 if _cuda_available() else -1,
+            )
+            logger.info("Business category model loaded (fine-tuned DistilBERT)")
+        except Exception as e:
+            logger.warning(f"Category model load failed: {e}")
+    else:
+        logger.info("Category model not found — category field will be empty")
+
+
+def _cuda_available() -> bool:
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
+
 
 load_models()
 
@@ -62,9 +121,11 @@ load_models()
 def health():
     return {
         "status": "ok",
-        "sentiment_loaded": sentiment_model is not None,
-        "google_api": bool(GOOGLE_API_KEY),
-        "available_regions": list(REGIONS.keys()),
+        "sentiment_loaded":        sentiment_model is not None,
+        "category_model_loaded":   category_model  is not None,
+        "google_api":              bool(GOOGLE_API_KEY),
+        "available_regions":       list(REGIONS.keys()),
+        "business_categories":     list(BUSINESS_CATEGORIES.values()),
     }
 
 @app.get("/regions")
@@ -233,24 +294,27 @@ async def _search_google_places(
                 combined_review_text, details.get("rating")
             )
 
+            biz_name  = details.get("name") or place_stub["name"]
+            biz_types = place_stub["types"]
+
             # Build response object
             biz = {
-                "name":            details.get("name") or place_stub["name"],
-                "address":         details.get("formatted_address") or place_stub["address"],
-                "phone":           details.get("formatted_phone_number", ""),
-                "phone_intl":      details.get("international_phone_number", ""),
-                "website":         details.get("website", ""),
-                "rating":          details.get("rating") or place_stub["rating"],
-                "review_count":    details.get("user_ratings_total") or place_stub["review_count"],
-                "status":          details.get("business_status", "OPERATIONAL"),
-                "google_maps_url": details.get("url", ""),
-                "is_open_now":     _is_open_now(details.get("opening_hours")),
-                "opening_hours":   details.get("opening_hours", {}).get("weekday_text", []),
+                "name":              biz_name,
+                "address":           details.get("formatted_address") or place_stub["address"],
+                "phone":             details.get("formatted_phone_number", ""),
+                "phone_intl":        details.get("international_phone_number", ""),
+                "website":           details.get("website", ""),
+                "rating":            details.get("rating") or place_stub["rating"],
+                "review_count":      details.get("user_ratings_total") or place_stub["review_count"],
+                "status":            details.get("business_status", "OPERATIONAL"),
+                "google_maps_url":   details.get("url", ""),
+                "is_open_now":       _is_open_now(details.get("opening_hours")),
+                "opening_hours":     details.get("opening_hours", {}).get("weekday_text", []),
                 "location": {
                     "lat": details.get("geometry", {}).get("location", {}).get("lat"),
                     "lng": details.get("geometry", {}).get("location", {}).get("lng"),
                 },
-                "recent_reviews":  [
+                "recent_reviews": [
                     {
                         "author":   r.get("author_name"),
                         "rating":   r.get("rating"),
@@ -259,11 +323,12 @@ async def _search_google_places(
                     }
                     for r in reviews[:3]
                 ],
-                "sentiment":       sentiment,
-                "sentiment_score": sentiment_score,
-                "opportunity":     opportunity,
-                "types":           place_stub["types"],
-                "place_id":        place_stub["place_id"],
+                "sentiment":         sentiment,
+                "sentiment_score":   sentiment_score,
+                "opportunity":       opportunity,
+                "business_category": _classify_business_category(biz_name, biz_types, combined_review_text),
+                "types":             biz_types,
+                "place_id":          place_stub["place_id"],
             }
 
             businesses.append(biz)
@@ -296,25 +361,90 @@ def _analyze_sentiment(review_text: str, rating: Optional[float]) -> tuple:
     if sentiment_model and review_text.strip():
         try:
             result = sentiment_model(review_text[:512])[0]
-            label = result["label"].upper()
+            raw_label = result["label"].upper()
             score = round(result["score"], 3)
         except Exception:
-            label, score = _rating_to_sentiment(rating)
+            raw_label, score = _rating_to_sentiment(rating)
     else:
-        label, score = _rating_to_sentiment(rating)
+        raw_label, score = _rating_to_sentiment(rating)
 
-    # Map to opportunity text
+    # Normalise label regardless of model output format
+    # Trained model outputs: NEGATIVE / NEUTRAL / POSITIVE
+    # Legacy/untrained: LABEL_0 / LABEL_1 / LABEL_2
+    if raw_label in ("LABEL_0", "0", "NEGATIVE"):
+        label = "NEGATIVE"
+    elif raw_label in ("LABEL_2", "2", "POSITIVE"):
+        label = "POSITIVE"
+    else:
+        label = "NEUTRAL"
+
     opportunities = {
         "NEGATIVE": "⚠ Poor reviews — strong SEO/reputation management opportunity",
         "NEUTRAL":  "→ Average rating — digital marketing improvement opportunity",
         "POSITIVE": "✓ Good reputation — upsell premium marketing services",
     }
-    # Normalize label
-    if label in ("LABEL_0", "0", "NEGATIVE"): label = "NEGATIVE"
-    elif label in ("LABEL_2", "2", "POSITIVE"): label = "POSITIVE"
-    else: label = "NEUTRAL"
-
     return label, score, opportunities.get(label, "Marketing opportunity")
+
+
+TYPE_CATEGORY_MAP = [
+    (("restaurant", "food", "cafe", "bar", "bakery", "meal_"),        "Food & Beverage"),
+    (("store", "shop", "retail", "clothing", "mall", "supermarket"),  "Retail & Shopping"),
+    (("hospital", "doctor", "dentist", "gym", "pharmacy", "health",
+      "physiotherapist", "spa", "veterinary"),                        "Healthcare & Wellness"),
+    (("school", "university", "education", "training", "library"),    "Education & Training"),
+    (("bank", "finance", "insurance", "accounting", "atm"),           "Finance & Banking"),
+    (("real_estate", "property", "housing", "lodging"),               "Real Estate & Property"),
+    (("car", "automotive", "vehicle", "gas_station", "parking"),      "Automotive & Transport"),
+    (("movie", "night_club", "casino", "museum", "art_gallery"),      "Entertainment & Media"),
+    (("electronics", "software", "computer"),                         "Technology & Software"),
+]
+
+
+def _category_from_types(types: list) -> Optional[str]:
+    """
+    Map Google Places `types` onto our category set.
+
+    Returns None when the types are only generic markers like
+    `point_of_interest`/`establishment`, which carry no category signal.
+    """
+    types_str = " ".join(types or []).lower()
+    if not types_str:
+        return None
+    for keys, category in TYPE_CATEGORY_MAP:
+        if any(k in types_str for k in keys):
+            return category
+    return None
+
+
+def _classify_business_category(name: str, types: list, bio: str = "") -> str:
+    """
+    Classify a business into one of 10 categories.
+
+    Order matters: Google's `types` field is ground truth supplied by the place
+    itself, while the fine-tuned classifier is an inference from a short name.
+    The classifier was previously consulted first and would confidently override
+    `types` with a wrong answer - a dentist coming back as "Food & Beverage" -
+    so it now only runs when `types` carries no usable signal (as in /analyze,
+    which has text but no place data).
+    """
+    from_types = _category_from_types(types)
+    if from_types:
+        return from_types
+
+    if category_model:
+        text = f"{name}. {bio}"[:512].strip(". ").strip()
+        if text:
+            try:
+                result = category_model(text)[0]
+                if result.get("score", 0) >= CATEGORY_MIN_CONFIDENCE:
+                    label = result["label"]
+                    label_id = int(label.replace("LABEL_", "")) if label.startswith("LABEL_") else 0
+                    return BUSINESS_CATEGORIES.get(label_id, "Professional Services")
+            except Exception:
+                pass
+
+    return "Professional Services"
+
 
 def _rating_to_sentiment(rating: Optional[float]) -> tuple:
     if rating is None:
@@ -329,18 +459,25 @@ def _rating_to_sentiment(rating: Optional[float]) -> tuple:
 def _generate_stub_businesses(location: str, category: str, count: int) -> List[dict]:
     """Return realistic stub data when Google API key is not set."""
     stubs = []
-    phone_prefixes = {
-        "UAE": "+971 50",
-        "Pakistan": "+92 300",
-        "Saudi Arabia": "+966 50",
-        "UK": "+44 20",
-        "USA": "+1 212",
-        "Germany": "+49 30",
-        "France": "+33 1",
-    }
+    phone_prefixes = [
+        (("uae", "united arab emirates", "dubai", "abu dhabi", "sharjah"), "+971 50"),
+        (("pakistan", "karachi", "lahore", "islamabad"),                   "+92 300"),
+        (("saudi", "riyadh", "jeddah"),                                    "+966 50"),
+        (("kuwait",),                                                      "+965 5"),
+        (("qatar", "doha"),                                                "+974 3"),
+        (("bahrain", "manama"),                                            "+973 3"),
+        (("oman", "muscat"),                                               "+968 9"),
+        (("india", "mumbai", "delhi"),                                     "+91 98"),
+        (("uk", "united kingdom", "london"),                               "+44 20"),
+        (("usa", "united states", "new york", "los angeles"),              "+1 212"),
+        (("canada", "toronto"),                                            "+1 416"),
+        (("germany", "berlin"),                                            "+49 30"),
+        (("france", "paris"),                                              "+33 1"),
+    ]
+    loc = location.lower()
     prefix = "+1 555"
-    for key, ph in phone_prefixes.items():
-        if key.lower() in location.lower():
+    for keys, ph in phone_prefixes:
+        if any(k in loc for k in keys):
             prefix = ph
             break
 
@@ -361,11 +498,12 @@ def _generate_stub_businesses(location: str, category: str, count: int) -> List[
             "opening_hours":   ["Monday–Friday: 9:00 AM – 6:00 PM"],
             "location":        {"lat": 25.2 + i * 0.01, "lng": 55.27 + i * 0.01},
             "recent_reviews":  [],
-            "sentiment":       sentiment,
-            "sentiment_score": score,
-            "opportunity":     opp,
-            "types":           [category.lower().replace(" ", "_")],
-            "place_id":        f"stub_{i}",
+            "sentiment":         sentiment,
+            "sentiment_score":   score,
+            "opportunity":       opp,
+            "business_category": _classify_business_category(f"Demo {category.title()}", [category]),
+            "types":             [category.lower().replace(" ", "_")],
+            "place_id":          f"stub_{i}",
         })
     return stubs
 
@@ -400,3 +538,48 @@ async def find_opportunity_businesses(request: SearchRequest):
         }
 
     return result
+
+
+# ── Batch sentiment + category analysis for scraped leads ────
+class AnalyzeRequest(BaseModel):
+    texts: List[str]    # List of review/bio/post texts to analyze
+    include_category: bool = True
+
+
+@app.post("/analyze")
+async def analyze_texts(request: AnalyzeRequest):
+    """
+    Batch analyze text snippets from scraped social media data.
+    Returns sentiment + business category for each input text.
+
+    Use this to post-process leads collected by colab_01_data_collection.py.
+
+    Request body:
+      {
+        "texts": ["Amazing product, highly recommend!", "Worst service ever."],
+        "include_category": true
+      }
+
+    Response:
+      {
+        "results": [
+          {"text": "...", "sentiment": "POSITIVE", "score": 0.97,
+           "category": "Professional Services", "opportunity": "..."},
+          ...
+        ]
+      }
+    """
+    results = []
+    for text in request.texts[:200]:  # Cap at 200 to avoid timeouts
+        sentiment, score, opportunity = _analyze_sentiment(text, None)
+        category = ""
+        if request.include_category:
+            category = _classify_business_category("", [], text)
+        results.append({
+            "text":        text[:200],
+            "sentiment":   sentiment,
+            "score":       score,
+            "category":    category,
+            "opportunity": opportunity,
+        })
+    return {"results": results, "total": len(results)}

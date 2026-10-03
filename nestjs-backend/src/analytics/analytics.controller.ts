@@ -6,5 +6,5 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class AnalyticsController {
   constructor(private analyticsService: AnalyticsService) {}
   @Get('dashboard') getDashboard(@Request() req) { return this.analyticsService.getDashboardStats(req.user.id); }
-  @Get('campaigns/:id') getCampaignDetail(@Param('id') id: string) { return this.analyticsService.getCampaignDetail(id); }
+  @Get('campaigns/:id') getCampaignDetail(@Param('id') id: string, @Request() req) { return this.analyticsService.getCampaignDetail(id, req.user.id); }
 }

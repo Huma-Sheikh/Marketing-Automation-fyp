@@ -8,5 +8,5 @@ export class WhitelabelController {
   @Post('agencies') @UseGuards(JwtAuthGuard) create(@Body() body: any, @Request() req) { return this.whitelabelService.createAgency(req.user.id, body); }
   @Get('agencies') @UseGuards(JwtAuthGuard) getAll(@Request() req) { return this.whitelabelService.getAgencies(req.user.id); }
   @Put('agencies/:id') @UseGuards(JwtAuthGuard) update(@Param('id') id: string, @Body() body: any, @Request() req) { return this.whitelabelService.updateAgency(id, req.user.id, body); }
-  @Delete('agencies/:id') @UseGuards(JwtAuthGuard) remove(@Param('id') id: string) { return this.whitelabelService.deleteAgency(id); }
+  @Delete('agencies/:id') @UseGuards(JwtAuthGuard) remove(@Param('id') id: string, @Request() req) { return this.whitelabelService.deleteAgency(id, req.user.id); }
 }

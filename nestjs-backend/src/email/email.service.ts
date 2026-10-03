@@ -31,25 +31,24 @@ export class EmailService {
     }
   }
 
-  async sendBulkEmails(leads: any[], subject: string, template: string) {
-    let sent = 0, failed = 0;
-    for (const lead of leads) {
-      if (!lead.email) { failed++; continue; }
-      const ok = await this.sendCampaignEmail({
-        to: lead.email,
-        leadName: `${lead.firstName || ''} ${lead.lastName || ''}`.trim(),
-        subject,
-        template,
-        variables: {
-          firstName: lead.firstName || 'there',
-          lastName: lead.lastName || '',
-          company: lead.company || 'your company',
-          jobTitle: lead.jobTitle || '',
-        },
-      });
-      ok ? sent++ : failed++;
-      await new Promise(r => setTimeout(r, 150));
-    }
-    return { sent, failed };
+  /**
+   * Send one campaign email to one lead. Bulk sending is driven by the `email`
+   * queue (see queue/outreach.processor.ts) rather than a loop with sleeps in
+   * the middle of an HTTP request.
+   */
+  async sendToLead(lead: any, subject: string, template: string): Promise<boolean> {
+    if (!lead?.email) return false;
+    return this.sendCampaignEmail({
+      to: lead.email,
+      leadName: `${lead.firstName || ''} ${lead.lastName || ''}`.trim(),
+      subject,
+      template,
+      variables: {
+        firstName: lead.firstName || 'there',
+        lastName: lead.lastName || '',
+        company: lead.company || 'your company',
+        jobTitle: lead.jobTitle || '',
+      },
+    });
   }
 }

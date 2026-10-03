@@ -20,17 +20,17 @@ export class SmsService {
     }
   }
 
-  async sendBulkSms(leads: any[], template: string) {
-    let sent = 0, failed = 0;
-    for (const lead of leads) {
-      if (!lead.phone) { failed++; continue; }
-      const message = template
-        .replace('{{firstName}}', lead.firstName || 'there')
-        .replace('{{company}}', lead.company || '');
-      const ok = await this.sendSms(lead.phone, message);
-      ok ? sent++ : failed++;
-      await new Promise(r => setTimeout(r, 1000));
-    }
-    return { sent, failed };
+  /**
+   * Render and send one campaign SMS. Bulk sending is driven by the `sms` queue
+   * (see queue/outreach.processor.ts), which applies the rate limit that used to
+   * be a 1-second sleep inside the request handler.
+   */
+  async sendToLead(lead: any, template: string): Promise<boolean> {
+    if (!lead?.phone) return false;
+    const message = template
+      .replace(/{{firstName}}/g, lead.firstName || 'there')
+      .replace(/{{lastName}}/g, lead.lastName || '')
+      .replace(/{{company}}/g, lead.company || '');
+    return this.sendSms(lead.phone, message);
   }
 }

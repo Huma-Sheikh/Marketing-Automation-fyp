@@ -14,12 +14,14 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { WhitelabelModule } from './whitelabel/whitelabel.module';
 import { BillingModule } from './billing/billing.module';
 import { QueueModule } from './queue/queue.module';
+import { PhoneNumbersModule } from './phone-numbers/phone-numbers.module';
 import { User } from './database/entities/user.entity';
 import { Lead } from './database/entities/lead.entity';
 import { Campaign } from './database/entities/campaign.entity';
 import { Call } from './database/entities/call.entity';
 import { Agency } from './database/entities/agency.entity';
 import { Subscription } from './database/entities/subscription.entity';
+import { PhoneNumber } from './database/entities/phone-number.entity';
 
 @Module({
   imports: [
@@ -28,16 +30,21 @@ import { Subscription } from './database/entities/subscription.entity';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
-        host: config.get('DB_HOST', 'localhost'),
-        port: +config.get('DB_PORT', '5432'),
-        username: config.get('DB_USERNAME', 'marketing_user'),
-        password: config.get('DB_PASSWORD', 'marketing_pass'),
-        database: config.get('DB_NAME', 'marketing_platform'),
-        entities: [User, Lead, Campaign, Call, Agency, Subscription],
+        url: config.get('DATABASE_URL'),
+        entities: [User, Lead, Campaign, Call, Agency, Subscription, PhoneNumber],
         synchronize: true,
         logging: false,
+
+        ssl: {
+          rejectUnauthorized: false,
+        },
+
+        extra: {
+          family: 4,
+        },
       }),
     }),
+
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -49,7 +56,7 @@ import { Subscription } from './database/entities/subscription.entity';
     }),
     AiModule, AuthModule, LeadsModule, BusinessModule, CampaignModule,
     CallingModule, EmailModule, SmsModule, AnalyticsModule, WhitelabelModule, BillingModule,
-    QueueModule,
+    QueueModule, PhoneNumbersModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }

@@ -2,7 +2,27 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as FormData from 'form-data';
-import { Controller, Get, UseGuards } from '@nestjs/common';
+
+export interface BusinessSearchQuery {
+  location: string;
+  category: string;
+  region_code?: string;
+  radius_meters?: number;
+  min_rating?: number;
+  max_rating?: number;
+  max_results?: number;
+}
+
+export interface LeadScoreFeatures {
+  platform_origin: number;        // 1-5, source platform quality
+  job_title_seniority: number;    // 1-5, CEO/founder = 5
+  has_email: 0 | 1;
+  has_phone: 0 | 1;
+  company_size_indicator: number; // 1 = solo, 3 = SME, 5 = enterprise
+  engagement_estimate: number;    // 0-100
+  industry_signal: number;        // 1 = low-value, 5 = high-value industry
+  bio_completeness: number;       // 0.0-1.0, how much of the profile is filled in
+}
 
 @Injectable()
 export class AiService {
@@ -62,33 +82,69 @@ export class AiService {
     }
   }
 
-  async scoreLead(features: object): Promise<number> {
+  /**
+   * Feature vector for the XGBoost lead scorer. These names are a contract with
+   * leads-service: they must match `feature_names` in
+   * python-services/leads-service/model/scorer/training_summary.json exactly.
+   * The service rejects unknown keys, so a rename here fails loudly rather than
+   * silently scoring every lead the same.
+   */
+  async scoreLead(features: LeadScoreFeatures): Promise<number> {
     try {
       const response = await axios.post(`${this.LEADS_URL}/score`, features, { timeout: 5000 });
-      return response.data.score || 50;
-    } catch {
+      const score = response.data?.score;
+      return typeof score === 'number' ? score : 50;
+    } catch (err) {
+      this.logger.warn('Lead scoring failed, using neutral score: ' + err.message);
       return 50;
     }
   }
 
-  async searchBusinesses(location: string, category: string): Promise<any[]> {
+  /**
+   * Business search. `endpoint` selects between the plain search and the
+   * find-opportunities variant, which sorts worst-rated first and attaches an
+   * outreach script - the whole point of the sentiment model.
+   */
+  async searchBusinesses(query: BusinessSearchQuery, endpoint: 'search' | 'find-opportunities' = 'search') {
     try {
-      const response = await axios.post(`${this.BUSINESS_URL}/search`,
-        { location, category }, { timeout: 30000 });
-      return response.data.businesses || [];
+      const response = await axios.post(`${this.BUSINESS_URL}/${endpoint}`, query, { timeout: 60000 });
+      return response.data;
     } catch (err) {
       this.logger.warn('Business search error: ' + err.message);
+      return { businesses: [], total: 0, error: 'Business service unavailable' };
+    }
+  }
+
+  /** Region presets the business service supports (for the UI picker). */
+  async getBusinessRegions(): Promise<any[]> {
+    try {
+      const response = await axios.get(`${this.BUSINESS_URL}/regions`, { timeout: 5000 });
+      return response.data.regions || [];
+    } catch (err) {
+      this.logger.warn('Region list unavailable: ' + err.message);
       return [];
     }
   }
 
+  /**
+   * @param company Per-tenant facts the agent may state, from the caller's
+   *   onboarding profile. Omitted/null keeps the generic script, which is what
+   *   every existing caller gets. One shared model serves every tenant this
+   *   way — a fine-tune per customer would be a ~1GB model each, rebuilt
+   *   whenever they edited their own data.
+   */
   async generateResponse(
     history: Array<{ role: string; content: string }>,
     maxTokens = 150,
+    company?: Record<string, any> | null,
   ): Promise<string> {
     try {
       const response = await axios.post(`${this.LLM_URL}/chat`,
-        { conversation_history: history, max_tokens: maxTokens }, { timeout: 8000 });
+        {
+          conversation_history: history,
+          max_tokens: maxTokens,
+          ...(company ? { company } : {}),
+        }, { timeout: 8000 });
       return response.data.response || "I apologize, I had trouble responding. Could you repeat that?";
     } catch {
       return "I apologize, I had a technical difficulty. Can I call you back?";

@@ -26,5 +26,9 @@ export class WhitelabelService {
     return this.agencyRepo.save(a);
   }
 
-  async deleteAgency(id: string) { await this.agencyRepo.delete(id); return { deleted: true }; }
+  async deleteAgency(id: string, ownerId: string) {
+    const result = await this.agencyRepo.delete({ id, ownerId });
+    if (!result.affected) throw new NotFoundException('Agency not found');
+    return { deleted: true };
+  }
 }

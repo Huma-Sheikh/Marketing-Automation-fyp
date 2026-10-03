@@ -8,6 +8,7 @@ const NAV = [
   { href: "/dashboard",  label: "Dashboard",   icon: "▣",  accent: "#3B82F6" },
   { href: "/leads",      label: "Leads",        icon: "◈",  accent: "#10B981" },
   { href: "/campaigns",  label: "Campaigns",    icon: "◉",  accent: "#F59E0B" },
+  { href: "/business",   label: "Business Search", icon: "◎", accent: "#EC4899" },
   { href: "/billing",    label: "Billing",      icon: "◆",  accent: "#8B5CF6" },
   { href: "/whitelabel", label: "White-Label",  icon: "◇",  accent: "#06B6D4" },
   { href: "/settings",   label: "Settings",     icon: "⊛",  accent: "#6B82A8" },

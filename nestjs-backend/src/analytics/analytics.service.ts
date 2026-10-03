@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Call } from '../database/entities/call.entity';
@@ -78,7 +78,11 @@ export class AnalyticsService {
     return { total: campaigns.length, running: campaigns.filter(c => c.status === 'running').length, completed: campaigns.filter(c => c.status === 'completed').length, recent: campaigns };
   }
 
-  async getCampaignDetail(campaignId: string) {
+  async getCampaignDetail(campaignId: string, userId: string) {
+    // Join through the campaign so a caller only ever sees call stats for a
+    // campaign they own.
+    const owned = await this.campaignRepo.findOne({ where: { id: campaignId, userId } });
+    if (!owned) throw new NotFoundException('Campaign not found');
     const base = () => this.callRepo.createQueryBuilder('c').where('c.campaignId = :campaignId', { campaignId });
     const [total, completed] = await Promise.all([base().getCount(), base().andWhere('c.status = :s', { s: 'completed' }).getCount()]);
     const outcomes = await base().select('c.outcome', 'outcome').addSelect('COUNT(*)', 'count').groupBy('c.outcome').getRawMany();

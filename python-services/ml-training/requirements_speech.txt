@@ -1,0 +1,34 @@
+# ── Multilingual STT (Whisper) + TTS (VITS/MMS) Training Dependencies ──────
+# Install: pip install -r requirements_speech.txt
+#
+# Mirrors the exact pinned versions both colab_03_stt_whisper_multilingual.py
+# and colab_04_tts_mms_multilingual.py install on first run. Colab's own
+# preinstalled transformers/huggingface_hub is frequently a mismatched pair
+# (throws "cannot import name 'is_offline_mode' from huggingface_hub") — this
+# set is verified compatible. Colab already ships torch+CUDA; don't reinstall
+# torch here unless you're setting this up outside Colab.
+#
+# colab_04 additionally clones https://github.com/ylacombe/finetune-hf-vits
+# and builds its Cython monotonic_align extension — that step only makes
+# sense inside the notebook itself, not from this file.
+
+transformers==4.44.2
+tokenizers==0.19.1
+huggingface_hub==0.24.7
+datasets[audio]==2.21.0
+accelerate==0.33.0
+
+evaluate==0.4.2
+jiwer==3.0.4          # Word Error Rate metric for STT
+kagglehub==0.2.9      # only needed if you enable the optional Kaggle Urdu dataset
+
+# TTS-only (colab_04 installs these itself; listed here for local parity)
+soundfile
+librosa
+Cython
+matplotlib
+tensorboard
+
+numpy
+pandas
+tqdm

@@ -1,7 +1,26 @@
 fastapi==0.109.0
 uvicorn==0.27.0
 python-multipart==0.0.6
-numpy==1.24.0
-torch==2.1.0
-torchaudio==2.1.0
-scipy==1.11.0
+# torch 2.3.1 wheels are built against NumPy 1.x; NumPy 2 breaks tensor<->array conversion.
+numpy>=1.24.0,<2
+
+# Real STT/TTS inference — matches the transformers version used to train the
+# checkpoints in python-services/ml-training/colab_03_stt_whisper_multilingual.py
+# and colab_04_tts_mms_multilingual.py. main.py imports these lazily and falls
+# back to stub mode if they're missing or models/ is empty, but they must be
+# installed for /stt and /tts to actually run inference instead of stubbing.
+torch==2.3.1
+transformers==4.44.2
+librosa==0.10.2.post1
+soundfile==0.12.1
+
+# Romanization for the Arabic/Urdu MMS-TTS voices, whose tokenizers are
+# "is_uroman": true. Pure Python, so the image no longer needs perl or a
+# cloned uroman checkout. Must match the trainer's preprocessing exactly —
+# colab_04 resolves the same package first.
+uroman==1.3.1.1
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+httpx==0.26.0
