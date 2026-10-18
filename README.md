@@ -1,5 +1,7 @@
 # AI Marketing Platform
 
+[![CI](https://github.com/Huma-Sheikh/Marketing-Automation-fyp/actions/workflows/ci.yml/badge.svg)](https://github.com/Huma-Sheikh/Marketing-Automation-fyp/actions/workflows/ci.yml)
+
 AI marketing automation: outbound voice calls with a live speech pipeline, lead
 scraping and scoring, business prospecting, email/SMS campaigns, analytics,
 white-label multi-tenancy and Stripe billing.
@@ -114,4 +116,15 @@ cd nestjs-backend && npm run test:e2e          # backend HTTP tests (no DB neede
 cd nextjs-frontend && npx tsc --noEmit && npm run build   # frontend type-check + build
 cd python-services/leads-service && pytest     # scraper parsers
 cd python-services/stt-tts-service && pytest   # STT/TTS service
+cd python-services/business-service && pytest  # business search + sentiment
+cd python-services/llm-service && pytest       # LLM chat + qualification
 ```
+
+### CI/CD
+
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every push and on
+pull requests to `main`; results are under the repository's **Actions** tab.
+Stages: lint & parse (tsc, ruff, compose) → backend unit tests (with coverage)
+→ backend e2e tests → frontend build → Python tests (all four services) →
+security audit (report-only) → Docker image builds. The final **CI Passed** job
+is the single check to require in branch protection.

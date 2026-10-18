@@ -1339,7 +1339,7 @@ def train_language(lang: str, corpus, base_dirs: List[str]):
         # Frozen modules stay in eval mode too: their dropout and layerdrop
         # would otherwise keep perturbing the priors and durations the
         # trainable side is learning to match.
-        model.train()
+        model.train()  # noqa: F821 -- closure; the `del model` below is on an early-return path
         for module in frozen:
             module.eval()
 

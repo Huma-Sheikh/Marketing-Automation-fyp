@@ -1,0 +1,316 @@
+# CI/CD pipeline for the AI Marketing Automation platform.
+#
+# Seven stages, viewable under the repo's "Actions" tab:
+#
+#   1. Lint & Parse        TypeScript type-check (backend + frontend), Python
+#                          syntax / undefined-name lint, docker-compose validation
+#   2. Backend Unit Tests  NestJS jest suites, with coverage report
+#   3. Backend E2E Tests   NestJS HTTP-level tests (supertest, mocked repositories)
+#   4. Frontend Build      Next.js production build
+#   5. Python Tests        pytest for all four FastAPI services, in stub mode
+#   6. Security Audit      npm audit, reported in the run summary (non-blocking)
+#   7. Docker Build        every image in docker-compose.yml builds (not pushed)
+#
+# "CI Passed" at the end is a single required check for branch protection: it
+# fails if any stage above failed or was cancelled.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"      # matches node:20-alpine in the Dockerfiles
+  PYTHON_VERSION: "3.10"  # matches python:3.10-slim in the Dockerfiles
+  FORCE_COLOR: "1"
+
+jobs:
+  # ───────────────────────────── 1. Lint & Parse ─────────────────────────────
+  lint:
+    name: "1 · Lint & Parse"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            nestjs-backend/package-lock.json
+            nextjs-frontend/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install backend dependencies
+        working-directory: nestjs-backend
+        run: npm ci --no-audit --no-fund
+
+      - name: Install frontend dependencies
+        working-directory: nextjs-frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Type-check backend (tsc)
+        working-directory: nestjs-backend
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Type-check frontend (tsc)
+        working-directory: nextjs-frontend
+        run: npx tsc --noEmit
+
+      - name: Install Python lint tools
+        run: pip install ruff==0.6.9
+
+      - name: Lint Python (syntax errors, undefined names)
+        working-directory: python-services
+        run: ruff check --target-version py310 --select E9,F63,F7,F82 --output-format github .
+
+      - name: Byte-compile every Python file
+        working-directory: python-services
+        run: python -m compileall -q .
+
+      - name: Validate docker-compose.yml
+        run: |
+          # compose refuses to parse when an env_file is missing; CI has no secrets,
+          # so stand in the documented examples.
+          cp nestjs-backend/.env.example nestjs-backend/.env
+          cp nextjs-frontend/.env.local.example nextjs-frontend/.env.local
+          docker compose config --quiet
+
+  # ─────────────────────────── 2. Backend Unit Tests ─────────────────────────
+  backend-unit:
+    name: "2 · Backend Unit Tests"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: nestjs-backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: nestjs-backend/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Run jest with coverage
+        run: npx jest --ci --coverage --coverageReporters=text-summary --coverageReporters=lcov
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: nestjs-backend/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ─────────────────────────── 3. Backend E2E Tests ──────────────────────────
+  backend-e2e:
+    name: "3 · Backend E2E Tests"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: nestjs-backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: nestjs-backend/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Run e2e tests
+        run: npm run test:e2e -- --ci
+
+      - name: Compile production build (nest build)
+        run: npm run build
+
+  # ───────────────────────────── 4. Frontend Build ───────────────────────────
+  frontend-build:
+    name: "4 · Frontend Build"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: nextjs-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: nextjs-frontend/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Cache Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: nextjs-frontend/.next/cache
+          key: nextjs-${{ hashFiles('nextjs-frontend/package-lock.json') }}-${{ hashFiles('nextjs-frontend/src/**') }}
+          restore-keys: nextjs-${{ hashFiles('nextjs-frontend/package-lock.json') }}-
+
+      - name: Production build (next build)
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  # ────────────────────────────── 5. Python Tests ────────────────────────────
+  python-tests:
+    name: "5 · Python Tests (${{ matrix.service }})"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [stt-tts-service, leads-service, business-service, llm-service]
+    defaults:
+      run:
+        working-directory: python-services/${{ matrix.service }}
+    env:
+      SCRAPE_MODE: demo          # leads-service: never touch third-party sites
+      GOOGLE_PLACES_API_KEY: ""  # business-service: always use stub data
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: python-services/requirements-ci.txt
+
+      - name: Install test dependencies
+        run: pip install -r ../requirements-ci.txt
+
+      - name: Run pytest
+        run: pytest -v --junitxml=pytest-report.xml
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-${{ matrix.service }}
+          path: python-services/${{ matrix.service }}/pytest-report.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ───────────────────────────── 6. Security Audit ───────────────────────────
+  security:
+    name: "6 · Security Audit"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Report-only: known advisories need dependency upgrades (some major), which
+      # are tracked separately rather than silently applied by CI. Findings are
+      # shown as warnings on the run and in its summary page.
+      - name: npm audit (production dependencies)
+        run: |
+          echo "## Security audit (npm, production deps)" >> "$GITHUB_STEP_SUMMARY"
+          echo "| App | critical | high | moderate | low |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for app in nestjs-backend nextjs-frontend; do
+            (cd "$app" && npm audit --omit=dev --json > ../audit-$app.json) || true
+            node -e '
+              const [file, app] = process.argv.slice(1);
+              let v;
+              try { v = require(file).metadata.vulnerabilities; }
+              catch { console.log(`| ${app} | audit unavailable | | | |`); process.exit(0); }
+              console.log(`| ${app} | ${v.critical} | ${v.high} | ${v.moderate} | ${v.low} |`);
+              if (v.critical + v.high > 0)
+                console.error(`::warning title=npm audit (${app})::${v.critical} critical, ${v.high} high severity advisories`);
+            ' "$PWD/audit-$app.json" "$app" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload audit reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit
+          path: audit-*.json
+          retention-days: 14
+
+  # ────────────────────────────── 7. Docker Build ────────────────────────────
+  docker:
+    name: "7 · Docker Build (${{ matrix.name }})"
+    needs: [backend-unit, backend-e2e, frontend-build, python-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: nestjs-backend,   context: nestjs-backend }
+          - { name: nextjs-frontend,  context: nextjs-frontend }
+          - { name: stt-tts-service,  context: python-services/stt-tts-service }
+          - { name: leads-service,    context: python-services/leads-service }
+          - { name: business-service, context: python-services/business-service }
+          - { name: llm-service,      context: python-services/llm-service }
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Python images install torch (several GB); reclaim runner disk first.
+      - name: Free disk space
+        if: startsWith(matrix.context, 'python-services/')
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af
+          df -h /
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: false
+          tags: marketing-automation/${{ matrix.name }}:ci-${{ github.sha }}
+
+  # ─────────────────────────────── Final gate ────────────────────────────────
+  ci-passed:
+    name: "CI Passed"
+    if: always()
+    needs: [lint, backend-unit, backend-e2e, frontend-build, python-tests, security, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all stages
+        run: |
+          echo '${{ toJSON(needs) }}' | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = "true" ]; then
+            echo "::error::One or more CI stages did not pass."
+            exit 1
+          fi
+          echo "All CI stages passed."
