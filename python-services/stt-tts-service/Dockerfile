@@ -6,7 +6,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Romanization for the Arabic/Urdu MMS-TTS voices comes from the `uroman` pip
 # package in requirements.txt, so this image no longer clones the perl uroman
-# repo (nor installs perl/git for it). main.py's _uromanize() still honours a
+# repo (nor installs perl/git for it). app/romanize.py's uromanize() still honours a
 # UROMAN env var pointing at a perl checkout if one is mounted in.
 
 COPY . .

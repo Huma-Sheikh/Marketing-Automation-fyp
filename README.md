@@ -22,6 +22,13 @@ nestjs-backend :3001
         └── llm       :8004  conversation + lead qualification
 ```
 
+## Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): repository layout, request and call flows, and conventions per layer
+- [docs/API.md](docs/API.md): every backend route, the error format, and auth rules
+- [nestjs-backend/README.md](nestjs-backend/README.md): backend modules and coding conventions
+- `python-services/<service>/README.md`: each AI service's routes, env vars and models
+
 ## Setup
 
 1. `cp nestjs-backend/.env.example nestjs-backend/.env` and fill it in.
@@ -31,8 +38,10 @@ nestjs-backend :3001
    node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
    ```
 2. `cp nextjs-frontend/.env.local.example nextjs-frontend/.env.local`
-3. `docker-compose up -d --build`
-4. Open http://localhost:3000
+3. Optional: `cp .env.example .env` to set the variables docker-compose
+   substitutes (`GOOGLE_PLACES_API_KEY`, `TTS_FINETUNED_LANGS`).
+4. `docker-compose up -d --build`
+5. Open http://localhost:3000
 
 Everything runs without third-party keys. Twilio, Resend, Stripe and Google
 Places each degrade to a clearly-logged disabled state rather than failing.
@@ -72,12 +81,13 @@ STT → LLM → TTS agent handles the conversation unchanged.
 ## Models
 
 Each Python service reads its own model directory. **Note the directory names
-differ between services** — they match what each service's `main.py` loads:
+differ between services** — they match what each service's `app/config.py` loads:
 
 | Service            | Directory                                  | Contents                                             |
 | ------------------ | ------------------------------------------ | ---------------------------------------------------- |
 | `stt-tts-service`  | `models/stt_model_final/`                  | Whisper checkpoint (multilingual)                     |
-|                    | `models/tts_model_final/<lang>/`           | One VITS/MMS checkpoint per language                  |
+|                    | `models/tts_model_final/<lang>/`           | Fine-tuned VITS/MMS voice per language                |
+|                    | `models/tts_model_base/<lang>/`            | Base MMS voice (used unless listed in `TTS_FINETUNED_LANGS`) |
 | `leads-service`    | `model/distilbert_ner_prod_v2/`            | NER (PERSON / ORG / LOC)                              |
 |                    | `model/scorer/xgboost_scorer.joblib`       | Lead scorer                                           |
 | `business-service` | `model/sentiment_roberta/`                 | Review sentiment                                      |
@@ -100,6 +110,8 @@ it is a deliberate operator decision.
 
 ```bash
 cd nestjs-backend && npm test                  # backend unit tests
+cd nestjs-backend && npm run test:e2e          # backend HTTP tests (no DB needed)
+cd nextjs-frontend && npx tsc --noEmit && npm run build   # frontend type-check + build
 cd python-services/leads-service && pytest     # scraper parsers
 cd python-services/stt-tts-service && pytest   # STT/TTS service
 ```

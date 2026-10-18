@@ -18,13 +18,14 @@ import { PassportModule } from '@nestjs/passport';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as request from 'supertest';
+import { randomUUID } from 'crypto';
 
-import { AuthController } from '../src/auth/auth.controller';
-import { AuthService } from '../src/auth/auth.service';
-import { JwtStrategy } from '../src/auth/jwt.strategy';
-import { LeadsController } from '../src/leads/leads.controller';
-import { LeadsService } from '../src/leads/leads.service';
-import { AiService } from '../src/ai/ai.service';
+import { AuthController } from '../src/modules/auth/auth.controller';
+import { AuthService } from '../src/modules/auth/auth.service';
+import { JwtStrategy } from '../src/modules/auth/jwt.strategy';
+import { LeadsController } from '../src/modules/leads/leads.controller';
+import { LeadsService } from '../src/modules/leads/leads.service';
+import { AiService } from '../src/modules/ai/ai.service';
 import { User } from '../src/database/entities/user.entity';
 import { Subscription } from '../src/database/entities/subscription.entity';
 import { Lead } from '../src/database/entities/lead.entity';
@@ -32,18 +33,18 @@ import { Lead } from '../src/database/entities/lead.entity';
 /** Minimal in-memory stand-in for a TypeORM repository. */
 function createFakeRepo<T extends { id?: string }>(seed: T[] = []) {
   let rows: any[] = [...seed];
-  let nextId = 1;
 
   const matches = (row: any, where: any) =>
     Object.entries(where || {}).every(([k, v]) => row[k] === v);
 
   return {
     _rows: () => rows,
-    _reset: (next: T[] = []) => { rows = [...next]; nextId = 1; },
+    _reset: (next: T[] = []) => { rows = [...next]; },
 
     create: jest.fn((data: any) => ({ ...data })),
     save: jest.fn(async (entity: any) => {
-      const row = { ...entity, id: entity.id ?? `id-${nextId++}` };
+      // Real UUIDs: routes validate :id with ParseUUIDPipe.
+      const row = { ...entity, id: entity.id ?? randomUUID() };
       const i = rows.findIndex(r => r.id === row.id);
       if (i >= 0) rows[i] = row; else rows.push(row);
       return row;
