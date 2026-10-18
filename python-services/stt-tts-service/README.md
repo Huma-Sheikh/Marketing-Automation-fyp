@@ -56,8 +56,18 @@ To decide, run the round-trip eval (TTS → Whisper → word error rate, lower i
 python eval_tts.py          # or: python eval_tts.py en de
 ```
 
-It prints a base-vs-fine-tuned WER table and the `TTS_FINETUNED_LANGS` value to use. Fine-tuned
-voices from colab_04 v1 lost on every language (e.g. en 8% → 25%, de 28% → 57%).
+It prints a base-vs-fine-tuned WER table and the `TTS_FINETUNED_LANGS` value to use.
+
+| lang | base MMS | v1 (all trainable) | v2 (frozen text side) |
+|------|---------:|-------------------:|----------------------:|
+| en   | 8%       | 25%                | **5%**                |
+| fr   | 23%      | 55%                | **19%**               |
+| de   | 27%      | 57%                | **24%**               |
+| ar   | 40%      | 90%                | **37%**               |
+| es   | 9%       | 37%                | 9% (tie → base)       |
+
+12 utterances per language (6 sentences × 2 seeds), judged by `stt_model_final`. Current
+setting: `TTS_FINETUNED_LANGS=ar,de,en,fr`.
 
 ## Running in Stub Mode (before models are ready)
 
@@ -76,5 +86,47 @@ This lets you test the full pipeline without trained models.
   must match the preprocessing used at training time — those checkpoints were trained on
   romanized text, and feeding them native script produces near-noise rather than a worse accent.
   Romanization uses the pure-Python `uroman` package (in `requirements.txt`), so no perl and no
-  cloned repo are needed; `_uromanize()` still honours a `UROMAN` env var pointing at a perl
+  cloned repo are needed; `app/romanize.py:uromanize()` still honours a `UROMAN` env var pointing at a perl
   uroman checkout if you have one.
+
+## Code layout
+
+```
+main.py            entry point: loads models, builds FastAPI(), includes the router (uvicorn main:app)
+app/config.py      every env var + constant (paths, sample rates, uroman language map)
+app/schemas.py     Pydantic request models (TTSRequest)
+app/models.py      model state + loading (Whisper eager at import, TTS voices lazily per language)
+app/speech.py      transcription / synthesis logic (no FastAPI imports)
+app/romanize.py    uroman romanization for is_uroman voices
+app/audio.py       WAV encoding helpers (silence, float waveform -> PCM16)
+app/routes.py      thin HTTP handlers
+app/errors.py      catch-all JSON 500 handler
+```
+
+`main.py` still exposes `stt_model` / `tts_model` / `_generate_silence_wav` for `test_main.py`;
+assignments to the model names are forwarded to `app.models`.
+
+## Environment variables
+
+See `.env.example`.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `TTS_FINETUNED_LANGS` | `""` | Languages (comma list or `all`) that serve the fine-tuned voice instead of the base MMS voice |
+| `UROMAN` | unset | Path to a perl uroman checkout; fallback when the `uroman` package is missing |
+
+## Routes
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | `/health` | – | `{status, stt_loaded, tts_loaded, tts_languages, tts_voice_source, mode}` |
+| POST | `/stt` | multipart `audio` file + optional `language` form field (default `en`) | `{text, language, mode}`; on inference error `{text: "", error}` (still 200) |
+| POST | `/tts` | `{"text": str, "language": "en"}` | `audio/wav`; silence in stub mode or on error |
+
+## Run & test
+
+```bash
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8001
+python -m pytest -q          # test_main.py, forces stub mode
+```

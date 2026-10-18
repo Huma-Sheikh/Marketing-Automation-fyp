@@ -43,7 +43,8 @@ services:
     environment:
       # Languages that serve the fine-tuned voice instead of base MMS, e.g.
       # "en,de" or "all". Set from eval_tts.py's output; empty = base everywhere.
-      TTS_FINETUNED_LANGS: ${TTS_FINETUNED_LANGS:-}
+      # v2 voices beat base on ar/de/en/fr in eval_tts.py; es tied, so stays base.
+      TTS_FINETUNED_LANGS: ${TTS_FINETUNED_LANGS:-ar,de,en,fr}
     restart: unless-stopped
 
   leads-service:
