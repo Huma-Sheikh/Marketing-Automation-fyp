@@ -16,6 +16,10 @@ joblib==1.4.2
 # Public-profile scraping (scrapers.py). Only used when SCRAPE_MODE=live.
 beautifulsoup4==4.12.3
 duckduckgo-search==6.1.7
+# duckduckgo-search only asks for >=0.4.8. Releases from 0.5.1 on are sdist-only
+# and fail to compile in python:3.10-slim (no Rust/BoringSSL toolchain), which
+# broke the Docker build; 0.4.9 ships a manylinux cp310 wheel.
+pyreqwest-impersonate==0.4.9
 
 # Testing
 pytest==7.4.4
