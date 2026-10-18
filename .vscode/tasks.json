@@ -1,0 +1,94 @@
+{
+  // Local dev stack, one VS Code terminal per service.
+  // Run: Ctrl+Shift+P -> "Tasks: Run Task" -> "Start all services".
+  // Stop: Ctrl+Shift+P -> "Tasks: Terminate Task" -> "All Running Tasks".
+  //
+  // Redis is not started here: it runs as the "Redis" Windows service
+  // (C:\Program Files\Redis). Check it with:  redis-cli ping   -> PONG
+  // Ports: frontend 3000, backend 3001, stt-tts 8001, leads 8002,
+  //        business 8003, llm 8004.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start all services",
+      "dependsOn": [
+        "stt-tts :8001",
+        "leads :8002",
+        "business :8003",
+        "llm :8004",
+        "backend :3001",
+        "frontend :3000"
+      ],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "stt-tts :8001",
+      "type": "shell",
+      "command": "${workspaceFolder}\\python-services\\stt-tts-service\\venv\\Scripts\\python.exe",
+      "args": ["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8001"],
+      "options": {
+        "cwd": "${workspaceFolder}\\python-services\\stt-tts-service",
+        // Languages that serve the fine-tuned voice instead of base MMS.
+        // Set from `python eval_tts.py` output; "" = base MMS everywhere.
+        // v2 (frozen text side) beat base on ar/de/en/fr and tied on es.
+        "env": { "TTS_FINETUNED_LANGS": "ar,de,en,fr" }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true }
+    },
+    {
+      "label": "leads :8002",
+      "type": "shell",
+      "command": "${workspaceFolder}\\python-services\\leads-service\\venv\\Scripts\\python.exe",
+      "args": ["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8002"],
+      "options": { "cwd": "${workspaceFolder}\\python-services\\leads-service" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true }
+    },
+    {
+      "label": "business :8003",
+      "type": "shell",
+      "command": "${workspaceFolder}\\python-services\\business-service\\venv\\Scripts\\python.exe",
+      "args": ["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8003"],
+      // GOOGLE_PLACES_API_KEY is read from the environment; without a real key
+      // the service runs in demo mode (google_api: false in /health).
+      "options": { "cwd": "${workspaceFolder}\\python-services\\business-service" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true }
+    },
+    {
+      "label": "llm :8004",
+      "type": "shell",
+      "command": "${workspaceFolder}\\python-services\\llm-service\\venv\\Scripts\\python.exe",
+      "args": ["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8004"],
+      "options": { "cwd": "${workspaceFolder}\\python-services\\llm-service" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true }
+    },
+    {
+      "label": "backend :3001",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "start:dev"],
+      "options": { "cwd": "${workspaceFolder}\\nestjs-backend" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true }
+    },
+    {
+      "label": "frontend :3000",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": { "cwd": "${workspaceFolder}\\nextjs-frontend" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always", "clear": true }
+    }
+  ]
+}

@@ -6,7 +6,7 @@ numpy>=1.24.0,<2
 
 # Real STT/TTS inference — matches the transformers version used to train the
 # checkpoints in python-services/ml-training/colab_03_stt_whisper_multilingual.py
-# and colab_04_tts_mms_multilingual.py. main.py imports these lazily and falls
+# and colab_04_tts_mms_multilingual.py. app/ imports these lazily and falls
 # back to stub mode if they're missing or models/ is empty, but they must be
 # installed for /stt and /tts to actually run inference instead of stubbing.
 torch==2.3.1
